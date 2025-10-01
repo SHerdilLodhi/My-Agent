@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Alira Server - Google OAuth</title>
+    <style>
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+        color: white;
+      }
+
+      .container {
+        background: rgba(255, 255, 255, 0.1);
+        backdrop-filter: blur(10px);
+        border-radius: 20px;
+        padding: 40px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+      }
+
+      h1 {
+        text-align: center;
+        margin-bottom: 30px;
+        font-size: 2.5em;
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+      }
+
+      .auth-section {
+        text-align: center;
+        margin: 30px 0;
+      }
+
+      .google-btn {
+        background: #4285f4;
+        color: white;
+        border: none;
+        padding: 15px 30px;
+        border-radius: 50px;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 15px rgba(66, 133, 244, 0.3);
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .google-btn:hover {
+        background: #3367d6;
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(66, 133, 244, 0.4);
+      }
+
+      .google-btn:active {
+        transform: translateY(0);
+      }
+
+      .google-icon {
+        width: 20px;
+        height: 20px;
+        background: white;
+        border-radius: 50%;
+        padding: 2px;
+      }
+
+      .status-section {
+        margin: 30px 0;
+        padding: 20px;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 15px;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+      }
+
+      .status-item {
+        margin: 10px 0;
+        padding: 10px;
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 10px;
+        border-left: 4px solid #4285f4;
+      }
+
+      .success {
+        border-left-color: #34a853;
+      }
+
+      .error {
+        border-left-color: #ea4335;
+      }
+
+      .info {
+        border-left-color: #fbbc04;
+      }
+
+      .token-display {
+        background: rgba(0, 0, 0, 0.2);
+        padding: 15px;
+        border-radius: 10px;
+        margin: 15px 0;
+        font-family: monospace;
+        font-size: 12px;
+        word-break: break-all;
+        max-height: 200px;
+        overflow-y: auto;
+      }
+
+      .scopes-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin: 20px 0;
+      }
+
+      .scope-tag {
+        background: rgba(66, 133, 244, 0.3);
+        padding: 8px 15px;
+        border-radius: 20px;
+        font-size: 14px;
+        border: 1px solid rgba(66, 133, 244, 0.5);
+      }
+
+      .loading {
+        display: none;
+        text-align: center;
+        margin: 20px 0;
+      }
+
+      .spinner {
+        border: 3px solid rgba(255, 255, 255, 0.3);
+        border-top: 3px solid white;
+        border-radius: 50%;
+        width: 30px;
+        height: 30px;
+        animation: spin 1s linear infinite;
+        margin: 0 auto;
+      }
+
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>🚀 Alira Server</h1>
+      <p style="text-align: center; font-size: 18px; margin-bottom: 30px">
+        Google OAuth Integration for Calendar Access
+      </p>
+
+      <div class="auth-section">
+        <h2>🔐 Google Authentication</h2>
+        <p>
+          Click the button below to authenticate with Google and access Calendar
+          features:
+        </p>
+
+        <button class="google-btn" onclick="authenticateWithGoogle()">
+          <div class="google-icon">G</div>
+          Sign in with Google
+        </button>
+      </div>
+
+      <div class="loading" id="loading">
+        <div class="spinner"></div>
+        <p>Authenticating with Google...</p>
+      </div>
+
+      <div class="status-section" id="statusSection" style="display: none">
+        <h3>📊 Authentication Status</h3>
+        <div id="statusContent"></div>
+      </div>
+
+      <div class="scopes-section">
+        <h3>🔑 Requested Scopes</h3>
+        <div class="scopes-list">
+          <span class="scope-tag">📅 Calendar</span>
+          <span class="scope-tag">📝 Calendar Events</span>
+          <span class="scope-tag">👤 Email</span>
+          <span class="scope-tag">👤 Profile</span>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const userId = "f23158a6-4ad6-496a-9b03-ba3f8fa8df77";
+    
+      async function authenticateWithGoogle() {
+        try {
+          showLoading(true);
+    
+          // Pass userId in query params
+          const response = await fetch(`/api/google-auth?user_id=${userId}`);
+          const data = await response.json();
+    
+          if (data.success) {
+            if (data.hasValidTokens) {
+              // User already has valid tokens, show success status
+              showStatus(
+                "success",
+                "Already Authenticated!",
+                "You already have valid Google OAuth tokens.",
+                data.data
+              );
+            } else if (data.authUrl) {
+              // No valid tokens, redirect to Google OAuth
+              window.location.href = data.authUrl;
+            } else {
+              throw new Error("No auth URL provided and no valid tokens found");
+            }
+          } else {
+            throw new Error(data.message || "Failed to get OAuth URL");
+          }
+        } catch (error) {
+          console.error("Authentication error:", error);
+          showStatus("error", "Authentication failed", error.message);
+        } finally {
+          showLoading(false);
+        }
+      }
+    
+      function showLoading(show) {
+        const loading = document.getElementById("loading");
+        loading.style.display = show ? "block" : "none";
+      }
+    
+      function showStatus(type, title, message, data = null) {
+        const statusSection = document.getElementById("statusSection");
+        const statusContent = document.getElementById("statusContent");
+    
+        let statusHtml = `
+          <div class="status-item ${type}">
+            <strong>${title}</strong><br>
+            ${message}
+          </div>
+        `;
+    
+        if (data) {
+          statusHtml += `
+            <div class="status-item info">
+              <strong>Token Information:</strong>
+              <div class="token-display">${JSON.stringify(data, null, 2)}</div>
+            </div>
+          `;
+        }
+    
+        statusContent.innerHTML = statusHtml;
+        statusSection.style.display = "block";
+      }
+    
+      // Check if we're returning from OAuth callback
+      function checkOAuthCallback() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const code = urlParams.get("code");
+        const error = urlParams.get("error");
+    
+        if (code) {
+          // Exchange code for tokens, include userId
+          exchangeCodeForTokens(code);
+        } else if (error) {
+          showStatus("error", "OAuth Error", error);
+        }
+      }
+    
+      async function exchangeCodeForTokens(code) {
+        try {
+          showLoading(true);
+    
+          // Pass userId along with code
+          const response = await fetch(`/api/google-callback?code=${code}&userId=${userId}`);
+          const data = await response.json();
+    
+          if (data.success) {
+            showStatus(
+              "success",
+              "Authentication Successful!",
+              "You have been successfully authenticated with Google.",
+              data.data
+            );
+    
+            // Clean up URL
+            window.history.replaceState({}, document.title, window.location.pathname);
+          } else {
+            throw new Error(data.message || "Failed to exchange code for tokens");
+          }
+        } catch (error) {
+          console.error("Token exchange error:", error);
+          showStatus("error", "Token Exchange Failed", error.message);
+        } finally {
+          showLoading(false);
+        }
+      }
+    
+      // Check for OAuth callback when page loads
+      document.addEventListener("DOMContentLoaded", checkOAuthCallback);
+    </script>
+    
+  </body>
+</html>
