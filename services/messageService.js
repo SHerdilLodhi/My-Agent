@@ -2,7 +2,7 @@ const { getAvailableTools } = require("../config/toolRegistry");
 
 function prepareTools() {
   const availableTools = getAvailableTools();
-  
+
   console.log("Available tools count:", availableTools.length);
   console.log("Available tools:", availableTools.map(tool => tool.name));
 
@@ -63,18 +63,18 @@ async function executeBasicLLM(message, model, openai) {
 
 async function executeFunctionCalls(assistantMessage, availableTools, userId) {
   const input = [];
-  
+
   for (const toolCall of assistantMessage.tool_calls) {
     const functionName = toolCall.function.name;
     const functionArgs = JSON.parse(toolCall.function.arguments);
-    
+
     console.log(`Executing function: ${functionName}`);
     console.log(`Function arguments:`, functionArgs);
 
     try {
       // Get the tool from registry
       const tool = availableTools.find(t => t.name === functionName);
-      
+
       if (tool) {
 
         // Add User ID (req.body.id) to Args (Mandatory)
@@ -85,7 +85,7 @@ async function executeFunctionCalls(assistantMessage, availableTools, userId) {
 
         // Execute the function
         const result = await tool.execute(functionArgs);
-        
+
         console.log(`Function ${functionName} result:`, result);
 
         // Add function result to input
@@ -115,7 +115,7 @@ async function executeFunctionCalls(assistantMessage, availableTools, userId) {
       });
     }
   }
-  
+
   return input;
 }
 
@@ -128,7 +128,7 @@ async function processMessage(message, model, userId, openai) {
     // If no valid tools, fall back to basic LLM response
     if (tools.length === 0) {
       console.log("No valid tools available, using basic LLM response");
-      
+
       const response = await executeBasicLLM(message, model, openai);
 
       return {
@@ -142,8 +142,24 @@ async function processMessage(message, model, userId, openai) {
       };
     }
 
-    // Create the conversation input
+    // Create the conversation input with system prompt
     let input = [
+      {
+        role: "system",
+        content: `You are a helpful AI assistant with access to various tools and APIs. 
+
+IMPORTANT INSTRUCTIONS:
+1. When a user asks you to perform an action (create event, send email, etc.), USE THE AVAILABLE TOOLS immediately
+2. DO NOT ask for information that you can reasonably infer or use defaults for
+3. If userId is available in the context, use it automatically for Google tools
+4. For missing optional parameters, use sensible defaults
+5. Only ask for clarification if absolutely critical information is missing
+6. Be proactive and action-oriented - prefer doing over asking
+
+Available tools: ${tools.map(t => t.function.name).join(', ')}
+
+User ID for this session: ${userId || 'not provided'}`
+      },
       { role: "user", content: message }
     ];
 
@@ -157,11 +173,13 @@ async function processMessage(message, model, userId, openai) {
 
     const assistantMessage = response.choices[0].message;
     input.push(assistantMessage);
+    console.log("Has tool_calls:", !!assistantMessage.tool_calls);
+    console.log("Tool calls length:", assistantMessage.tool_calls?.length || 0);
 
     // Check if the model wants to call functions
     if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
       console.log("Function calls detected:", assistantMessage.tool_calls.length);
-      
+
       // Execute function calls
       const functionResults = await executeFunctionCalls(assistantMessage, availableTools, userId);
       input.push(...functionResults);

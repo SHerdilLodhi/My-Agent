@@ -10,7 +10,7 @@ const openai = new OpenAI({
 
 router.post("/message-llm", validateMessage, async (req, res) => {
   try {
-    const { message, model = "gpt-4-turbo-preview", userId } = req.validatedData;
+    const { message, model = "gpt-5-nano", userId } = req.validatedData;
 
     const result = await processMessage(message, model, userId, openai);
 

@@ -1,38 +1,47 @@
-// mongo.js
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const mongoose = require('mongoose');
 
-const uri =
-  "mongodb+srv://lodhisherdil1_db_user:7Gm2K6bzgUsTDF7L@cluster0.jgcgg79.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0";
-// Create a MongoClient instance
-const client = new MongoClient(uri, {
-  serverApi: {
-    version: ServerApiVersion.v1,
-    strict: true,
-    deprecationErrors: true,
-  },
-});
-
-// Connect function (reusable)
-async function connectDB() {
+// MongoDB connection configuration
+const connectDB = async () => {
   try {
-    if (!client.topology || !client.topology.isConnected()) {
-      await client.connect();
-      console.log("✅ Connected to MongoDB Atlas");
+    const uri = process.env.MONGO_CONNECTION_STRING || process.env.MONGODB_URI;
+    
+    if (!uri) {
+      throw new Error('MongoDB connection string not found in environment variables');
     }
-    return client;
-  } catch (err) {
-    console.error("❌ MongoDB connection error:", err);
+
+    const conn = await mongoose.connect(uri);
+
+    console.log(`✅ MongoDB Connected: ${conn.connection.host}`);
+    
+    // Set up connection event listeners
+    mongoose.connection.on('error', (err) => {
+      console.error('MongoDB connection error:', err);
+    });
+
+    mongoose.connection.on('disconnected', () => {
+      console.log('MongoDB disconnected');
+    });
+
+    // Graceful shutdown
+    process.on('SIGINT', async () => {
+      await mongoose.connection.close();
+      console.log('MongoDB connection closed through app termination');
+      process.exit(0);
+    });
+
+    return conn;
+  } catch (error) {
+    console.error('Error connecting to MongoDB:', error);
     process.exit(1);
   }
-}
+};
 
-// Helper to get DB
-function getDB(dbName) {
-  return client.db(dbName);
-}
+// Import and export models
+const { User, UserToken } = require('../models');
 
-// Export functions
 module.exports = {
   connectDB,
-  getDB,
+  User,
+  UserToken,
+  mongoose
 };

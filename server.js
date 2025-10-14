@@ -40,7 +40,8 @@ function createApp() {
 
 // Server startup
 async function startServer() {
-  await connectDB(); // ✅ ensure MongoDB connected before starting server
+  // Connect to MongoDB
+  connectDB().catch(console.error);
 
   const app = createApp();
   const PORT = process.env.PORT || 3000;

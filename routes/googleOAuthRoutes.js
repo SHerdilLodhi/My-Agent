@@ -1,8 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const { generateAuthUrl, getTokensFromCode } = require("../config/googleOAuth");
-const supabase = require("../config/supabase");
-const httpClient = require("../config/axios");
+const { User, UserToken } = require("../models");
 
 // Google OAuth login endpoint
 router.get("/google-auth", async (req, res) => {
@@ -19,23 +18,11 @@ router.get("/google-auth", async (req, res) => {
 
     console.log("Checking for existing tokens for user ID:", user_id);
 
-    // Check for existing valid tokens directly in user_tokens table
-    const { data: existingTokens, error: tokenError } = await httpClient.supabase.get('/rest/v1/user_tokens', {
-      user_id: `eq.${user_id}`,
-      provider: `eq.google_calendar`,
-      select: '*',
-      order: 'created_at.desc'
-    });
-
-    if (tokenError) {
-      console.error("Error checking existing tokens:", tokenError);
-      return res.status(500).json({
-        success: false,
-        error: "Failed to check existing tokens",
-        message: "Could not check for existing tokens",
-        details: tokenError
-      });
-    }
+    // Check for existing valid tokens in MongoDB
+    const existingTokens = await UserToken.find({ 
+      user_id: user_id,
+      provider: 'google_calendar'
+    }).sort({ createdAt: -1 });
 
     // Check if tokens exist and are not expired
     if (existingTokens && existingTokens.length > 0) {
@@ -55,8 +42,8 @@ router.get("/google-auth", async (req, res) => {
             access_token: latestToken.access_token,
             refresh_token: latestToken.refresh_token,
             expires_at: latestToken.expires_at,
-            created_at: latestToken.created_at,
-            token_id: latestToken.id
+            created_at: latestToken.createdAt,
+            token_id: latestToken._id
           }
         });
       } else {
@@ -119,22 +106,10 @@ router.get("/google-callback", async (req, res) => {
     const userInfo = await oauth2.userinfo.get();
     const userEmail = userInfo.data.email;
 
-    const { data: users, error: userError } = await httpClient.supabase.get('/rest/v1/users', {
-      email: `eq.${userEmail}`,
-      select: 'id,email'
-    });
+    // Find user in MongoDB
+    const user = await User.findOne({ email: userEmail });
 
-    if (userError) {
-      console.error("Error finding user:", userError);
-      return res.status(500).json({
-        success: false,
-        error: "Failed to find user",
-        message: "Could not find user in database",
-        details: userError
-      });
-    }
-
-    if (!users || users.length === 0) {
+    if (!user) {
       console.error("User not found in database:", userEmail);
       return res.status(404).json({
         success: false,
@@ -144,25 +119,14 @@ router.get("/google-callback", async (req, res) => {
       });
     }
 
-    const userId = users[0]?.id;
+    const userId = user._id;
     console.log("Found user ID:", userId);
 
     // Check if user already has tokens for this provider
-    const { data: existingTokens, error: checkError } = await httpClient.supabase.get('/rest/v1/user_tokens', {
-      user_id: `eq.${userId}`,
-      provider: `eq.google_calendar`,
-      select: '*'
+    const existingTokens = await UserToken.find({
+      user_id: userId,
+      provider: 'google_calendar'
     });
-
-    if (checkError) {
-      console.error("Error checking existing tokens:", checkError);
-      return res.status(500).json({
-        success: false,
-        error: "Failed to check existing tokens",
-        message: "Could not check for existing tokens",
-        details: checkError
-      });
-    }
 
     const tokenData = {
       user_id: userId,
@@ -177,42 +141,23 @@ router.get("/google-callback", async (req, res) => {
 
     if (existingTokens && existingTokens.length > 0) {
       // Update existing token record
-      const existingTokenId = existingTokens[0].id;
+      const existingTokenId = existingTokens[0]._id;
       console.log("Updating existing token record for user:", userId);
       
-      const updateResponse = await httpClient.supabase.patch(`/rest/v1/user_tokens?id=eq.${existingTokenId}`, tokenData);
+      storedToken = await UserToken.findByIdAndUpdate(
+        existingTokenId,
+        tokenData,
+        { new: true }
+      );
 
-      if (updateResponse.error) {
-        console.error("Database error updating tokens:", updateResponse.error);
-        return res.status(500).json({
-          success: false,
-          error: "Failed to update tokens",
-          message: "Tokens received but failed to update in database",
-          details: updateResponse.error
-        });
-      }
-
-      storedToken = { id: existingTokenId };
       operation = 'updated';
       console.log("Tokens updated successfully in database");
     } else {
       // Create new token record
       console.log("Creating new token record for user:", userId);
       
-      const createResponse = await httpClient.supabase.post('/rest/v1/user_tokens', tokenData);
+      storedToken = await UserToken.create(tokenData);
 
-      if (createResponse.error) {
-        console.error("Database error creating tokens:", createResponse.error);
-        return res.status(500).json({
-          success: false,
-          error: "Failed to create tokens",
-          message: "Tokens received but failed to create in database",
-          details: createResponse.error
-        });
-      }
-
-      // For POST operations, get the created record
-      storedToken = createResponse.data && createResponse.data.length > 0 ? createResponse.data[0] : null;
       operation = 'created';
       console.log("Tokens created successfully in database");
     }
@@ -231,8 +176,8 @@ router.get("/google-callback", async (req, res) => {
     };
 
     // Only add database_id if we have a valid storedToken
-    if (storedToken && storedToken.id) {
-      responseData.database_id = storedToken.id;
+    if (storedToken && storedToken._id) {
+      responseData.database_id = storedToken._id;
     }
 
     res.json({
@@ -268,43 +213,50 @@ router.get("/google-status", (req, res) => {
   });
 });
 
-// Create new user in Supabase using centralized axios config
+// Create new user in MongoDB
 router.post("/users", async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email } = req.body;
 
-    if (!email || !password) {
+    if (!email) {
       return res.status(400).json({
         success: false,
         error: "Missing required fields",
-        message: "Email and password are required to create a user"
+        message: "Email is required to create a user"
       });
     }
 
-    const userData = {
-      email,
-      password,
-    };
+    // Check if user already exists
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(409).json({
+        success: false,
+        error: "User already exists",
+        message: "A user with this email already exists"
+      });
+    }
 
-    const response = await httpClient.supabase.post('/auth/v1/admin/users', userData);
+    // Create new user
+    const newUser = await User.create({ email });
 
-    console.log("User created successfully:", response.status);
+    console.log("User created successfully:", newUser._id);
 
     res.status(201).json({
       success: true,
       message: "User created successfully",
-      data: response.data
+      data: {
+        id: newUser._id,
+        email: newUser.email,
+        createdAt: newUser.createdAt,
+        updatedAt: newUser.updatedAt
+      }
     });
   } catch (error) {
-    console.error("User creation error:", error.response?.status, error.message);
+    console.error("User creation error:", error.message);
     res.status(500).json({
       success: false,
       error: "Failed to create user",
-      message: error.message,
-      details: {
-        status: error.response?.status,
-        data: error.response?.data
-      }
+      message: error.message
     });
   }
 });
@@ -315,26 +267,14 @@ router.get("/user-tokens/:userId", async (req, res) => {
     const { userId } = req.params;
     console.log("Fetching tokens for user:", userId);
     
-    const response = await httpClient.supabase.get('/rest/v1/user_tokens', {
-      user_id: `eq.${userId}`,
-      select: '*',
-      order: 'created_at.desc'
-    });
-    
-    if (response.error) {
-      console.error("Error fetching tokens:", response.error);
-      return res.status(500).json({
-        success: false,
-        error: "Failed to fetch tokens",
-        message: response.error.message
-      });
-    }
+    const tokens = await UserToken.find({ user_id: userId })
+      .sort({ createdAt: -1 });
     
     res.json({
       success: true,
       message: "Tokens retrieved successfully",
-      data: response.data || [],
-      count: response.data ? response.data.length : 0
+      data: tokens,
+      count: tokens.length
     });
   } catch (error) {
     console.error("Error fetching user tokens:", error);
@@ -351,25 +291,14 @@ router.get("/user-tokens", async (req, res) => {
   try {
     console.log("Fetching all stored OAuth tokens...");
     
-    const response = await httpClient.supabase.get('/rest/v1/user_tokens', {
-      select: '*',
-      order: 'created_at.desc'
-    });
-    
-    if (response.error) {
-      console.error("Error fetching tokens:", response.error);
-      return res.status(500).json({
-        success: false,
-        error: "Failed to fetch tokens",
-        message: response.error.message
-      });
-    }
+    const tokens = await UserToken.find()
+      .sort({ createdAt: -1 });
     
     res.json({
       success: true,
       message: "All tokens retrieved successfully",
-      data: response.data || [],
-      count: response.data ? response.data.length : 0
+      data: tokens,
+      count: tokens.length
     });
   } catch (error) {
     console.error("Error fetching all tokens:", error);

@@ -14,7 +14,7 @@ POST http://localhost:3000/api/message-llm
 Content-Type: application/json
 
 {
-  "userId" :"f23158a6-4ad6-496a-9b03-ba3f8fa8df77",
+  "userId" :"68dda625f4574d10dee8c878",
   "message": "set an event in my google calendar for September 18 2025 at 10:00 AM"
 }
 
@@ -23,7 +23,7 @@ POST http://localhost:3000/api/message-llm
 Content-Type: application/json
 
 {
-  "userId" :"f23158a6-4ad6-496a-9b03-ba3f8fa8df77",
+  "userId" :"68dda625f4574d10dee8c878",
   "message": "get google calendar events from the 22 August 2023"
 }
 
@@ -35,7 +35,7 @@ POST http://localhost:3000/api/message-llm
 Content-Type: application/json
 
 {
-  "userId": "f23158a6-4ad6-496a-9b03-ba3f8fa8df77",
+  "userId": "68dda625f4574d10dee8c878",
   "message": "Show me my last email from past 2 days"
 }
 
@@ -44,7 +44,7 @@ POST http://localhost:3000/api/message-llm
 Content-Type: application/json
 
 {
-  "userId": "f23158a6-4ad6-496a-9b03-ba3f8fa8df77",
+  "userId": "68dda625f4574d10dee8c878",
   "message": "Send an email to lodhisherdil1@gmail.com with subject 'Testing Alira Gmail' and body 'Hi i am testing email from LLM'"
 }
 
@@ -56,7 +56,7 @@ POST http://localhost:3000/api/message-llm
 Content-Type: application/json
 
 {
-  "userId": "f23158a6-4ad6-496a-9b03-ba3f8fa8df77",
+  "userId": "68dda625f4574d10dee8c878",
   "message": "Create a new Google Sheet called 'Test Project Tasks' with columns names: Task, Status, Due Date, Priority in the first Row"
 }
 
@@ -65,7 +65,7 @@ POST http://localhost:3000/api/message-llm
 Content-Type: application/json
 
 {
-  "userId": "f23158a6-4ad6-496a-9b03-ba3f8fa8df77",
+  "userId": "68dda625f4574d10dee8c878",
   "message": "List down my spresheets names with ids created in last 10 days"
 }
 
