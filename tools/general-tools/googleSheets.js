@@ -1,6 +1,5 @@
-const httpClient = require("../../config/axios");
 const { createSheetsService } = require("../../config/googleOAuth");
-const { getUserTokens } = require("../../utils/supabaseAuth");
+const { getUserTokens } = require("../../utils/mongoAuth");
 
 const googleSheetsTool = {
   name: "googleSheets",

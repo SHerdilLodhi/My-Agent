@@ -2,7 +2,7 @@ const Joi = require("joi");
 
 // Custom validation for userId that accepts both UUID and MongoDB ObjectId
 const userIdValidator = Joi.string().custom((value, helpers) => {
-  // Check if it's a valid UUID (for Supabase compatibility)
+  // Check if it's a valid UUID (legacy format support)
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   // Check if it's a valid MongoDB ObjectId (24 character hex string)
   const objectIdRegex = /^[0-9a-f]{24}$/i;
